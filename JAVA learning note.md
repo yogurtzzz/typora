@@ -1347,7 +1347,7 @@ try(InputStream input = new ByteArrayInputStream(data)){
 
 * OutputStream 是所有输出流的父类
 * FileOutputStream实现了文件流输出
-* ByteArrayOutputStream在内存中模拟一个字节流输出
+* **ByteArrayOutputStream在内存中模拟一个字节流输出**（可用这个类来暂时储存读取到的byte数组，最后调用它的toByteArray方法，来将流中的数据全部转换为字节数组，起到一个缓冲的作用）
 * 使用try-with-resource保证OutputStream正确关闭
 
 
@@ -1361,3 +1361,183 @@ try(InputStream input = new ByteArrayInputStream(data)){
 * `void flush()` ：将缓冲区的内容输出。通常情况我们不用调用该方法，因为缓冲区满了时，会自动调用。在调用`close`关闭输出流之前，也会自动调用`flush`
 
 在向**电脑磁盘**，**网络**输出数据时，出于效率考虑，并不是输出一个字节，就立即输出，而是将待输出的字节，放入到内存的一个缓冲区里，当这个缓冲区满了以后，再一次性全部输出。对于很多设备来说，一次写入1个字节，和一次写入1000。花费的时间是一样的。
+
+
+
+### Filter模式
+
+JDK提供的InputStream包括：
+
+- FileInputStream：从文件读取数据
+- ServletInputStream：从HTTP请求读取数据
+- Socket.getInputStream( ) ：从TCP连接读取数据
+
+
+
+若要给FileInputStream添加额外的功能（如，添加缓冲区，计算签名，添加加解密），可以派生FileInputStream的子类，但是这样以来，对其他的InputStream实现这些功能，也需要进行派生子类，且如果功能有交叉，产生的子类的数量非常之大。故
+
+JDK将InputStream分为两类：
+
+* 直接提供数据的InputStream:
+
+  FileInputStream, ByteArrayInputStream,ServletInputStream
+
+* 提供额外附加功能的InputStream：
+
+  BufferedInputStream,DigestInputStream,CipherInputStream
+
+* 通过组合功能，而非继承，这样的设计模式称为Filter模式，或者Decorator模式
+* 可以通过少量的类来实现各种功能的组合
+
+使用InputStream时，可以根据情况进行组合
+
+![inputstream](https://i.loli.net/2019/06/10/5cfe5791a0f5835143.png)
+
+```java
+InputStream input = new GZIPInputStream(
+    new BufferedInputStream(
+        new FileInputStream("test.gz")
+    )
+);
+```
+
+
+
+InputStream/OutputStream继承体系
+
+![in](https://i.loli.net/2019/06/10/5cfe62981d55a59054.png)
+
+![out](https://i.loli.net/2019/06/10/5cfe62e162b1681253.png)
+
+
+
+**小结**：
+
+* JAVA IO使用Filter模式为InputStream/OutputStream增加功能
+* 可以把一个InputStream和任意FilterInputStream组合，OuputStream同理
+* Filter模式可以在运行期动态增加功能（又称为Decorator模式）
+
+
+
+例子：读取文件时，计算读取的字节数（文件的大小）
+
+```java
+import java.io.*;
+public class CountInputStream extends FilterInputStream{
+        public int count = 0;
+        public CountInputStream(InputStream in) {
+            super(in);
+        }
+    
+    //重写read(byte[] b,int off,int len)就行了
+    //不必重写read(byte[] b)，因为该方法的实现也是调用了read(byte[] b,int off,int len)
+        @Override
+        public int read(byte[] b, int off, int len) throws IOException {
+            int n = super.read(b, off, len);
+            count += n;
+            return n;
+        }
+}
+
+public class Test{
+    public static void main(String[] args){
+        CountInputStream countIn = new CountInputStream(new FileInputStream("E:\\test.txt"));
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+       int n;
+       byte[] bytes = new byte[1024];
+       while((n = countIn.read(bytes)) != -1){
+           outputStream.write(bytes); //先将读取到的byte数组写到字节输出流中
+       }
+        //将流中的字节全部转换成byte数组
+       String res = new String(outputStream.toByteArray(),"UTF-8");  
+       System.out.println(res);
+       System.out.println("size : " +countIn.count+" bytes" );
+    }
+}
+```
+
+### ZIP
+
+ZipInputStream也是一种FilterInputStream
+
+![zip](https://i.loli.net/2019/06/10/5cfe6bed80f7b25208.png)
+
+* 可以直接读取Zip的内容
+
+
+
+
+
+#### ZipInputStream
+
+基本用法
+
+```java
+public static void main(String[] args) throws IOException {
+        byte[] bytes = new byte[1024];
+        try (ZipInputStream zip = new ZipInputStream(new FileInputStream("E:\\haha.zip"))) {
+            //对于每一个ZipEntry，都表示一个压缩文件或者目录
+            ZipEntry entry = null;
+            while ((entry = zip.getNextEntry()) != null) {
+                ByteArrayOutputStream byteArrayOut = new ByteArrayOutputStream();
+                String name = entry.getName();
+                if (!entry.isDirectory()) {
+                    int n;
+                    while ((n = zip.read(bytes)) != -1) {
+                        byteArrayOut.write(bytes);
+                    }
+                }
+                String res = new String(byteArrayOut.toByteArray(),"UTF-8");
+                System.out.println("文件名："+name+"\n文件内容：\n"+res+"\n==================================");
+            }
+        }
+    }
+```
+
+输出结果：
+
+![out](https://i.loli.net/2019/06/10/5cfe6f2f7d05323506.png)
+
+
+
+#### ZipOutputStream
+
+基本用法
+
+```java
+public static void main(String[] args) throws IOException {
+        byte[] bytes = new byte[1024];
+        try(ZipOutputStream zipOut = new ZipOutputStream(new FileOutputStream("E:zipOut.zip"))){
+            File[] files = {new File("E:\\haha.txt"),new File("E:\\lalala.txt")};
+            for (File file : files){
+                //一个Entry表示一个文件或目录
+                zipOut.putNextEntry(new ZipEntry(file.getName()));
+                //写入
+                zipOut.write(getFileDataAsBytes(file));
+                //该Entry写入完毕
+                zipOut.closeEntry();
+            }
+        }
+    }
+
+public static byte[] getFileDataAsBytes(File f) throws IOException {
+        InputStream input = new FileInputStream(f);
+        ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+        int n;
+        byte[] bytes = new byte[1024];
+        while((n = input.read(bytes)) != -1){
+            byteArrayOutputStream.write(bytes);
+        }
+        return byteArrayOutputStream.toByteArray();
+    }
+//最终生成了一个zipOut.zip文件，里面包含了2个文件，haha.txt和lalala.txt
+```
+
+
+
+#### 小结
+
+* ZipInputStream可以读取Zip格式的流
+* ZipOutputStream可以把数据写入Zip
+* ZipInputStream/ZipOutputStream都是FilterInputStream/FilterOutputStream
+* 配合FileInputStream/FileOutputStream就可以对zip文件进行读写
