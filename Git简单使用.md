@@ -286,3 +286,13 @@ $ ssh-keygen -t rsa -C "1009784814@qq.com"
 会生成2个文件，`example`和`example.pub`
 
 注册一个github账号，在个人设置中添加SSH KEY，将`example.pub`里的内容复制进去，即可
+
+
+
+
+
+Git中文显示乱码解决：
+
+在bash下输入:  `git config --global core.quotepath false`
+
+[参考链接](https://blog.csdn.net/tyro_java/article/details/53439537)
