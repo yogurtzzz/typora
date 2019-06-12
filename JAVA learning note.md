@@ -123,10 +123,10 @@ Class | Field | Method .getAnnotation(anno.class)
 
 ```java
 public class Test{
-    @Report(value = "this is String",type = 0
+    @Report(value = "this is String",type = 0）
     private String a;
     
-    @Report(value = "this is method",type = 1
+    @Report(value = "this is method",type = 1）
             public void say(){
                 Syste.out.println("hello");
             }
@@ -195,7 +195,7 @@ for(Annotation anno:annos_1){
 
 
 
-给泛型类编写静态方法时，需要将方法生命为泛型方法
+给泛型类编写静态方法时，需要将方法声明为泛型方法
 
 ```java
 public class Pair<T>{
@@ -1541,3 +1541,265 @@ public static byte[] getFileDataAsBytes(File f) throws IOException {
 * ZipOutputStream可以把数据写入Zip
 * ZipInputStream/ZipOutputStream都是FilterInputStream/FilterOutputStream
 * 配合FileInputStream/FileOutputStream就可以对zip文件进行读写
+
+
+
+### classpath
+
+从classpath下读取文件，可以避免不同环境下文件路径不一致的问题
+
+在classpath路径下的文件，路径总是以`/`开头
+
+```java
+InputStream in = getClass().getResourceAsStream("/db.properties");
+```
+
+
+
+### 序列化
+
+指的是把一个Java对象变成二进制内容（即 `byte[]`）
+
+* 序列化后可以把`byte[]`通过网络进行传输，或保存在文件中
+
+一个可序列化的Java对象，必须实现`Serializable`接口，`Serializable`接口没有定义任何方法，这样的空接口被称为`标记接口`（Marker Interface）
+
+
+
+反序列化，类似。
+
+
+
+ObjectOutputStream
+
+可以将一个Java对象，写入到二进制流
+
+```java
+try（ObjectOutputStream out = new ObjectOutputStream(...)）{
+    out.writeObject(new Person("Big Yellow"));
+}
+```
+
+
+
+ObjectInputStream
+
+负责从二进制流读取一个Java对象
+
+```java
+try(ObjectInputStream in = new ObjectInputStream(...)){
+    Object p1 = in.readObject();
+    Person p2 = (Person) in.readObject();
+    //readObject()可能抛出异常： ClassNotFoundException，InvalidClassException
+    
+    //ClassNotFoundException：机器A的JAVA程序传递给机器B的JAVA程序，A中有定义Person类，而B中没定义Persion类，就会报这个错
+    //InvalidClassException：机器A定义的Person对象有一个int age，机器B定义的Person中时long age，则会报这个错，Class不匹配
+}
+```
+
+
+
+**反序列化的特点**：（重要）
+
+* 反序列化由JVM直接构造出Java对象，**不调用构造方法**
+
+
+
+```java
+//测试
+try(ObjectOutputStream output = new ObjectOutputStream(new FileOutputStream("/out.data"))){
+            output.writeInt(777);
+            output.writeUTF("We will not use hello world");
+            output.writeObject(new Person("yogurt",23));
+        }
+        
+        try(ObjectInputStream input = new ObjectInputStream(new FileInputStream("/out.data"))){
+            System.out.println(input.readInt());
+            System.out.println(input.readUTF());
+            System.out.println(input.readObject());
+        }
+```
+
+
+
+**小结**
+
+* 要使Java对象可序列化，必须实现Serializable接口
+* Serializable接口是空接口，这样的接口被称为”标记接口“
+* 反序列化时，不调用构造方法
+* 可设置serialVersionUID作为版本号（非必需）
+* Java的序列化机制，仅适用于Java程序之间交互数据，若要与其他语言交换数据，需要使用更通用的序列化方法，如JSON
+
+
+
+**注意**：
+
+若不显示指定serialVersionUID，则JAVA序列化机制会根据Class自动生成一个serialVersionUID作为序列化版本用，这种情况下，若Class不发生修改（类名修改，增删字段或方法），则每次编译生成的serialVersionUID皆时一致的，但是若Class发生了修改，编译生成serialVersionUID就会不同，这时，反序列化检测到接收的序列化流中的serialVersionUID与本地Class的serialVersionUID不一致，就会报错（InvalidClassException）
+
+
+
+例子如下：
+
+```java
+/*try(ObjectOutputStream output = new ObjectOutputStream(new FileOutputStream("/out.data"))){
+            output.writeInt(777);
+            output.writeUTF("We will not use hello world");
+            output.writeObject(new Person("yogurt",23));
+        }*/
+//首先通过上面被注释掉的代码，将Person写入到out.data
+//随后注释掉上面代码，运行下面代码，发现输出了正确结果
+//若此时，对Person类进行一定的修改，如增加一个方法域
+//再执行下面代码，即会报错
+
+        try(ObjectInputStream input = new ObjectInputStream(new FileInputStream("/out.data"))){
+            System.out.println(input.readInt());
+            System.out.println(input.readUTF());
+            Person person = (Person) input.readObject();
+            System.out.println(person);
+        }
+```
+
+```
+777
+We will not use hello world
+Exception in thread "main" java.io.InvalidClassException: com.yogurt.test.Person; local class incompatible: stream classdesc serialVersionUID = -2744247394581433250, local class serialVersionUID = 1594032614617864095
+	at java.io.ObjectStreamClass.initNonProxy(ObjectStreamClass.java:616)
+	at java.io.ObjectInputStream.readNonProxyDesc(ObjectInputStream.java:1843)
+	at java.io.ObjectInputStream.readClassDesc(ObjectInputStream.java:1713)
+	at java.io.ObjectInputStream.readOrdinaryObject(ObjectInputStream.java:2000)
+	at java.io.ObjectInputStream.readObject0(ObjectInputStream.java:1535)
+	at java.io.ObjectInputStream.readObject(ObjectInputStream.java:422)
+	at com.yogurt.test.JavaTest.main(JavaTest.java:23)
+
+Process finished with exit code 1
+
+```
+
+
+
+### Reader
+
+Reader是所有字符输入流的父类
+
+`java.io.Reader`和`java.io.InputStream`的区别
+
+| InputStream                                    | Reader                                      |
+| ---------------------------------------------- | ------------------------------------------- |
+| 字节流，单位是`byte`                           | 字符流，单位是`char`                        |
+| `int read()` 返回 -1，或0~255  （一个字节8位） | `int read()`返回-1，0~65535（一个字符16位） |
+| `int read(byte[] b)`，读取字节数组             | `int read(char[] c)`，读取字符数组          |
+
+
+
+例子：完整地读取一个Reader里的所有字符
+
+```java
+Reader reader = null;
+try{
+    reader = FileReader("E:\\reader.txt");
+    int n;
+    while((n = reader.read()) != -1){
+        System.out.println((char)n);
+    }
+}finally{
+    if(reader != null)
+        reader.close();
+}
+
+//利用缓冲区，一次读取多个字符
+try(Reader reader = new FileReader("E:\\reader.txt")){  
+    //这种try-with-resource是jdk1.7引入的，这里要注意FileReader采用的是系统默认编码
+    char[] charBuff = new char[1024];
+    int n = reader.read(charBuff);
+    System.out.println(n);
+}
+```
+
+
+
+`CharArrayReader`可以在内存中模拟一个Reader，类似于ByteArrayInputStream之于InputStream
+
+
+
+Reader实际是基于InputStream构造的
+
+* FileReader内部是持有一个FileInputStream的
+
+* Reader可以通过InputStream来构造
+
+  ```java
+  InputStream inStream = new FileInputStream("E:\\test.txt");
+  Reader reader = new InputStreamReader(inStream,"UTF-8");
+  reader.close();
+  //调用了reader的close，就不要再调用inStream的close了
+  ```
+
+
+
+**小结**
+
+* Reader是所有字符输入流的父类
+* FileReader实现了文件字符流输入
+* CharArrayReader在内存中模拟一个字符流输入
+* Reader是基于InputStream构造，FileReader使用系统默认编码，无法指定编码，可以通过InputStreamReader来指定编码
+
+
+
+### Writer
+
+Write是所有字符输出流的父类
+
+`java.io.Writer`和`java.io.OutputStream`的区别
+
+| OutputStream                              | Writer                                    |
+| ----------------------------------------- | ----------------------------------------- |
+| 字节流，以`byte`为单位                    | 字符流，以`char`为单位                    |
+| `void write(int byte)`，写入字节（0~255） | `void write(int char)`，写入字符，0~65535 |
+| `void write(byte[] b)`，写入字节数组      | `void write(char[] c)`，写入字符数组      |
+|                                           | `void write(String s)`，写入字符串        |
+
+```java
+try(Writer writer = new FileWriter("E:\\out.txt")){
+    writer.write(65);
+    writer.write("Hello".toCharArray()); //写入char[]
+    writer.write("World"); //写入String
+}
+```
+
+
+
+可以用`CharArrayWriter`模拟一个字符输出流，类似于`ByteArrayOutputStream`。可以作为一个字符缓冲区
+
+```java
+try(Writer writer = new CharArrayWriter()){
+    writer.write(65);
+    writer.write("Hello");
+    char[] buff = writer.toCharArray();
+}
+```
+
+
+
+注意Reader的read方法和Writer的write方法都是阻塞的（和InputStream/OutputStream类似）
+
+Writer也是基于OutputStream来构造的
+
+* FileWrite内部持有一个FileOutputStream
+
+* Writer可以通过OutputStream来构造（可指定编码方式）
+
+  ```java
+  OutputStream out = new FileOutputStream("E:\\out.txt");
+  Writer writer = new OutputStreamWriter(out,"UTF-8");
+  writer.close();
+  //调用了writer的close，就不要再调用out的close了
+  ```
+
+
+
+**小结**
+
+* Writer是所有字符输出流的父类
+* FileWriter实现了文件字符输出流
+* CharArrayWriter再内存中模拟一个字符输出流，可用做缓冲区
+* Writer是基于OutputStream构造，FileWriter使用系统默认编码，无法指定编码，可以通过OutputStreamWriter来指定编码
