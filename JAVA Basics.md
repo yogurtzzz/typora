@@ -2093,3 +2093,937 @@ public static void main(String[] args) throws IOException, ClassNotFoundExceptio
 
 
 
+## Java加密与安全
+
+### 编码算法
+
+#### URL编码
+
+浏览器发送数据给服务器时使用的编码
+
+* 编码规则
+
+  `A-Z`  `a-z`  `0-9`  `-_.*` 保持不变
+
+  其他字符以`%XX`表示，如`<用%3C表示，中 用%E4%B8%AD 表示（中的UTF-8编码为e4b8ad）`
+
+* URL编码和解码
+
+  ```java
+  //代码示例
+  import java.net.URLEncoder;
+  String a = "user=大黄&password=yuehun<22";
+  String encoded = URLEncoder.encode(a,"UTF-8");
+  String decoded = URLDecoder.decode(encoded,"UTF-8");
+  ```
+
+* 编码后的文本仅包含`A~Z`，`a~z`，`0~9`，`-_.*`，`%`，便于浏览器和服务器处理
+
+[关于字符编码，戳这里](#coding)
+
+#### Base64编码
+
+一种将**二进制数据**转换成**字符串**的编码算法，适用于文本协议。一般在系统交互时，都需要使用Base64对明文进行转码，随后再进行签名或加密，之后再传输。
+
+在传输过程中，使用全英文是没问题，但涉及到中文时就会乱码，并且，网络上传输的并不全是可打印字符，如二进制文件，图片等，Base64编码就是为了解决该问题，它用64个可打印字符来表示二进制数据。
+
+* Base64编码步骤
+
+  * 第一步，将待转换的二进制数据，每3个字节分为一组，共24位
+  * 第二步，将上面的24位，每6位为一组，分为4组
+  * 第三步，在每组前面添加2个0，每组由6位变成8位，总共32位，4字节
+  * 第四步，每个字节，根据Base64编码表，取得相应的值
+
+* Base64编码表
+
+  ```
+  编号     字符
+  0~25    A~Z
+  26~51   a~z
+  52~61   0~9
+  62      +
+  63      /
+  ```
+
+由此可见：
+
+* Base64使用`A~Z a~z 0~9 +/`共64个可打印字符来进行编码
+
+* Base64编码后的文本，占用空间要比原文件大，大1/3（将3个字节变为4个字节）
+
+* 若原文件的字节数不是3的倍数，则用0补充，缺1个字节则补1个字节（补一个`0x00`），缺2个字节则补2个，补充一个字节，如下图，补充1个字节，则Base64编码后结尾有一个`=`，补充2个字节则有2个`=`
+
+  ![](https://img-blog.csdnimg.cn/20190517212307382.jpg?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9oZWxsby5ibG9nLmNzZG4ubmV0,size_16,color_FFFFFF,t_70)
+
+
+
+可知，Base64就是用6位表示字符（2^6^=64），同理，Base32是取了5位，Base16取了4位
+
+
+
+示例：
+
+现有一字符串，其内容为`Hello World`，对该字符串内容进行Base64编码，分析如下：
+
+```
+首先，对字符串进行UTF-8编码，得到的二进制数据如下（字节数组）
+
+48  65  6C  6C  6F  20  57  6F  72  6C  64  (16进制)
+H   e   l   l   o   sp  W   o   r   l   d
+
+其次，对二进制数据，每3个字节为一组，3个字节24位，再按6位一组，拆成4组
+
+48 65 6C  
+0100 1000 0110 0101 0110 1100（转成二进制，共3个字节24位）
+010010 000110 010101 101100 （每6位一组，分成4组）
+18 6 21 44  （求出每组的十进制值）
+S  G V  s    （查Base64编码表，得出对应字符）
+
+6C 6F 20
+0110 1100 0110 1111 0010 0000
+011011 000110 111100 100000
+27 6 60 32
+b  G 8  g
+
+57 6F 72
+0101 0111 0110 1111 0111 0010
+010101 110110 111101 110010
+21 54 61 50
+V  2  9  y
+
+6C 64 (00)
+
+0110 1100 0110 0100 (0000 0000)               
+011011 000110 010000 (000000)
+27 6 16 =
+b  G Q  =
+
+最后，连起来，得到的Base64编码结果为
+SGVsbG8gV29ybGQ=
+```
+
+Java测试代码如下
+
+```java
+@Test
+public void test() {
+    String s = "Hello World";
+    byte[] bs = s.getBytes();
+    for (int i = 0; i < bs.length; i++){
+        System.out.print(byteToHex(bs[i])+" ");  
+        //查看对字符串s取字节数组，对应的字节是否是UTF-8编码（或ASCII编码）
+    }
+    System.out.println();
+    String base64 = Base64.getEncoder().encodeToString(bs);
+    System.out.println(base64);  //SGVsbG8gV29ybGQ=
+}
+public String byteToHex(byte b){
+    int i = b & 0xFF;
+    return Integer.toHexString(i);
+}
+```
+
+[Base64参考链接](https://blog.csdn.net/wo541075754/article/details/81734770)
+
+
+
+### 摘要算法
+
+又称为 Hash算法/Digest/数字指纹，其实等同于Hash算法
+
+它的作用主要是**验证原始数据是否被篡改**
+
+* 对任意长度的数据，生成固定长度的摘要
+* 相同的输入数据，始终生成相同的摘要
+* 不同的输入数据，尽可能生成不同的摘要
+
+Java中的`Object.hashCode()`就是一个摘要算法
+
+常用的摘要算法有
+
+| 算法    | 输出大小          |
+| ------- | ----------------- |
+| MD5     | 128bits / 16bytes |
+| SHA-1   | 160bits / 20bytes |
+| SHA-256 | 256bits / 32bytes |
+
+
+
+#### MD5
+
+代码示例
+
+```java
+String data = "hello,world";
+MessageDigest md = MessageDigest.getInstance("MD5");
+md.update(data.getBytes("UTF-8"));
+//也可以分片输入数据，最终生成的摘要数据是一致的
+//md.update("hello".getBytes("UTF-8"));
+//md.update(",world".getBytes("UTF-8"));
+byte[] result = md.digest();  //生成16字节的摘要信息
+```
+
+
+
+MD5可用来
+
+* **验证文件的完整性**：在网站上下载文件时，一般网站会提供文件对应的MD5校验值，可将下载后的文件用MD5做摘要，与网站上的校验值做比对，来判断文件的完整性。
+
+* **存储用户口令**：数据库中不存储用户的原始口令（不存储明文口令），而是存储原始口令的MD5值（出于安全考虑）。那么如何判断用户口令正确呢？用户输入口令后，系统对输入的口令做MD5摘要运算，将得到的值与数据库中存储的MD5值比对，若一致，则口令正确。
+
+**彩虹表攻击**
+
+一个对弱口令预先计算好的MD5表
+
+![](https://i.loli.net/2019/06/24/5d10e5a1ac6c393072.png)
+
+黑客可以通过查看数据库中存储的用户口令的MD5，来和彩虹表比对，若用户使用了彩虹表里有的弱口令，则会出现安全问题。如下图，很容易查出bob对应的口令为hello123
+
+![](https://i.loli.net/2019/06/24/5d10e6acedf8126663.png)
+
+所以一般计算用户口令的MD5时，会添加一个随机数，取名为`salt`，这样，通过口令和salt结合，计算出的MD5，就不容易被彩虹表攻击
+
+![](https://i.loli.net/2019/06/24/5d10e64d9fda162885.png)
+
+
+
+#### SHA	
+
+| 算法    | 输出长度（位） | 输出长度（字节） |
+| ------- | -------------- | ---------------- |
+| SHA-1   | 160bits        | 20bytes          |
+| SHA-256 | 256bits        | 32bytes          |
+| SHA-512 | 512bits        | 64bytes          |
+
+在Java中使用SHA1
+
+```java
+import java.security.MessageDigest;
+
+MessageDigest md = MessageDigest.getInstance("SHA-1");
+md.update("hello".getBytes("UTF-8"));
+md.update("world".getBytes("UTF-8"));
+byte[] bs = md.digest();
+```
+
+SHA-1是一种比MD5更安全的哈希算法
+
+
+
+### 加密算法
+
+#### 对称加密
+
+指的是，加密与解密使用的是同一个密钥。在加密时，通过**明文**+**密钥**，生成密文；解密时，通过**密文**+**密钥**，还原明文。
+
+常用的对称加密算法：
+
+* DES：**密钥长度**：56/64；**工作模式**：ECB,CBC,PCBC,CTR；**填充模式**：NoPadding，PKCS5Padding
+* AES：**密钥长度**：128/192/256；**工作模式**：ECB,CBC,PCBC,CTR；**填充模式**：NoPadding，PKCS5Padding
+
+
+
+通信双方不能直接传递密钥（假设信道是不安全的），故用到**密钥交换算法**（Diffie-Hellman算法  or  DH算法），算法流程如下：
+
+* 首先通信双方Alice和Bob，共享一个大素数*p*和数*g*，其中*g*是*p*的原根[^1]
+* Alice生成一个私有的随机数a，并计算A = *g*^a^ mod *p* ，将A发送给Bob
+* Bob生成一个私有的随机数b，并计算B = *g*^b^ mod *p*，将B发送给Alice
+* 对于Alice，有  K~a~=B^a^ mod *p* = (*g*^b^ mod *p*) ^a^ mod *p*  = *g* ^a+b^ mod *p*
+* 对于Bob，有K~b~=A^b^ mod *p* =(*g*^a^ mod *p*) ^b^ mod *p* = *g* ^b+a^ mod *p*
+* 最终有，K~a~ = K~b~ ，双方即协商出一致的密钥
+
+
+
+**DH算法也不能避免中间人攻击**（若Alice发送的A被中间人Cric截获，Cric用自己的随机数制造出C，发送给Bob，并截获Bob发送的B，再将自己的C发送给Alice，则可以冒充Alice与Bob通信，同时冒充Bob与Alice通信）
+
+
+
+#### 非对称加密
+
+指的是，加密和解密，使用的是不同的密钥。
+
+只有用同一个公钥/私钥 对，才能进行正常的加解密。
+
+假设A要发送消息给B
+
+加密：
+
+* A用自己的私钥进行加密，发送给B，B用A的公钥进行解密
+* A用B的公钥进行加密，发送给B，B用自己的私钥进行解密
+
+典型的非对称加密算法：RSA
+
+```java
+import java.security.*;
+//获得公钥/私钥对
+KeyPairGenerator keyPairGenerator = KeyPairGenerator.getInstance("RSA");
+keyPairGenerator.initialize(1024);
+KeyPair keyPair = keyPairGenerator.generateKeyPair();
+PrivateKey privateKey = keyPair.getPrivate();
+PublicKey publicKey = keyPair.getPublic();
+
+//加密,使用公钥加密
+public byte[] encrypt(byte[] msg) throws GeneralSecurityException {
+        Cipher cipher = Cipher.getInstance("RSA");
+        cipher.init(Cipher.ENCRYPT_MODE,this.publicKey);
+        return cipher.doFinal(msg);
+}
+//解密,使用私钥解密
+public byte[] decrypt(byte[] msg) throws GeneralSecurityException{
+        Cipher cipher = Cipher.getInstance("RSA");
+        cipher.init(Cipher.DECRYPT_MODE,this.privateKey);
+        return cipher.doFinal(msg);
+}
+```
+
+
+
+非对称加密的特点：
+
+* 对称加密需要协商密钥，而非对称加密可以安全地公开各自的**公钥**
+* 在N个人之间进行通信时，使用非对称加密，则只需要N个密钥对，每个人各自管理自己的密钥对即可；而对称加密则需要`N*(N-1)/2`个密钥，每个人需要管理`N-1`个密钥
+* 不能防止中间人攻击
+
+### 数字签名
+
+基于非对称加密，为了解决非对称加密时，可能发生的中间人攻击。
+
+**可以将数字签名理解为：消息摘要+非对称加密**（发送方对消息进行摘要，并用**私钥**加密，接收方用**发送方的公钥**对签名进行解密验证）
+
+若没有数字签名，在**甲乙**使用非对称加密进行通信时，中间人**丙**可以利用**乙**的**公钥**，对要发送的信息进行加密，并发送给**乙**，那么**乙**无法知道消息是不是真的由**甲**发送的，故引入了数字签名：
+
+* 甲在发送加密的消息时，同时要发送自己的**数字签名**
+* 发送方用自己的**私钥**对消息进行签名
+* 接收方用**发送方的公钥**对数据进行签名验证，若验证通过，则确定发送人的身份
+
+作用
+
+* 防止伪造发送方的身份
+* 防止发送方抵赖已发送过的消息
+* 防止信息在传输过程中被修改
+
+常见的数字签名算法
+
+* `RSA`签名算法
+  * `MD5withRSA`
+  * `SHA1withRSA`
+  * `SHA256withRSA`
+* `DSA`（Digital Signature Algorithm） ：使用了`EIGamal`数字签名算法，只能配合`SHA`的摘要算法来使用
+  * `SHA1withDSA`
+  * `SHA256withDSA`
+  * `SHA512withDSA`
+
+代码示例
+
+```java
+import java.security.*;
+public class Sign {
+    /*数字签名及验证*/
+    PrivateKey sk;
+    PublicKey pk;
+    public Sign() throws NoSuchAlgorithmException {
+        KeyPairGenerator keyPairGenerator = KeyPairGenerator.getInstance("RSA");
+        keyPairGenerator.initialize(1024);
+        KeyPair keyPair = keyPairGenerator.generateKeyPair();
+        this.sk = keyPair.getPrivate();
+        this.pk = keyPair.getPublic();
+    }
+    public byte[] sign(byte[] msg) throws GeneralSecurityException {
+        //sign by private key
+        Signature signature = Signature.getInstance("SHA1withRSA");
+        signature.initSign(this.sk);
+        signature.update(msg);
+        return signature.sign();
+    }
+
+    public boolean verify(byte[] msg,byte[] sign) throws GeneralSecurityException{
+        //verify by public key
+        Signature signature = Signature.getInstance("SHA1withRSA");
+        signature.initVerify(this.pk);
+        signature.update(msg);
+        return signature.verify(sign);
+    }
+}
+/***********/
+@Test
+public void test() throws GeneralSecurityException, UnsupportedEncodingException{
+    Sign rsa = new Sign();
+    byte[] msg = "Hello,Signature".getBytes("UTF-8");
+    byte[] signature = rsa.sign(msg);  //获取签名
+    System.out.println("sign:"+Base64.getEncoder().encodeToString(signature));
+    boolean verify = rsa.verify(msg,signature); //用公钥进行签名验证
+    System.out.println(verify);  //true
+    boolean verify2 = new Sign().verify(msg,signature); //用不同的公钥进行签名验证
+    System.out.println(verify2); //false
+}
+```
+
+
+
+### 数字证书
+
+前面的：
+
+* 摘要算法：防止数据被篡改
+* 加解密算法：使数据能加密传输
+* 数字签名：提供了对发送者的身份验证，防止数据被篡改，抗否认性
+
+而**数字证书**是集合了多种密码学算法，用于实现**数据加解密**，**身份认证**，**签名**等多种功能的一种网络安全标准
+
+
+
+**数字证书**包括了：
+
+* 非对称加密算法：对数据进行加解密
+* 签名算法：保证数据完整性，提供身份验证，抗否认性
+* 摘要算法：确保证书本身没有被篡改
+
+
+
+数字证书采用了**链式签名认证**
+
+* Root CA证书（根证书）
+  * 下一级证书
+    * 用户证书
+
+
+
+如，QQ邮箱网站的证书
+
+![](https://i.loli.net/2019/06/29/5d173371aa6d420263.png)
+
+使用数字证书代码示例：
+
+```java
+import javax.crypto.Cipher;
+import java.io.*;
+import java.security.*;
+import java.security.cert.X509Certificate;
+import java.util.Base64;
+
+public class DigitalCertificate {
+    private PrivateKey sk;
+    public X509Certificate certificate;
+
+    public DigitalCertificate(KeyStore keyStore,String certName,String password){
+        try {
+            this.sk = (PrivateKey) keyStore.getKey(certName,password.toCharArray());
+            this.certificate = (X509Certificate) keyStore.getCertificate(certName);
+        } catch (GeneralSecurityException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public byte[] encrypt(byte[] msg) throws GeneralSecurityException {
+        Cipher cipher = Cipher.getInstance(this.sk.getAlgorithm());
+        cipher.init(Cipher.ENCRYPT_MODE,this.sk);
+        return cipher.doFinal(msg);
+    }
+
+    public byte[] decrypt(byte[] data) throws GeneralSecurityException{
+        PublicKey key = this.certificate.getPublicKey();
+        Cipher cipher = Cipher.getInstance(key.getAlgorithm());
+        cipher.init(Cipher.DECRYPT_MODE,key);
+        return cipher.doFinal(data);
+    }
+
+    public byte[] sign(byte[] msg) throws GeneralSecurityException{
+      Signature signature = Signature.getInstance(this.certificate.getSigAlgName());
+      signature.initSign(this.sk);
+      signature.update(msg);
+      return signature.sign();
+    }
+
+    public boolean verify(byte[] data,byte[] sign) throws GeneralSecurityException{
+      Signature signature = Signature.getInstance(this.certificate.getSigAlgName());
+      signature.initVerify(certificate);
+      signature.update(data);
+      return signature.verify(sign);
+    }
+
+static KeyStore loadKeyStore(String keyStoreFile,String password){
+  try(InputStream in = new BufferedInputStream(new FileInputStream(keyStoreFile))) {
+       KeyStore keyStore = KeyStore.getInstance(KeyStore.getDefaultType());
+       keyStore.load(in,password.toCharArray());
+       return keyStore;
+  } catch (GeneralSecurityException | IOException e) {
+            throw new RuntimeException(e);
+  }
+}
+    public static void main(String[] args) throws Exception{
+        byte[] msg = "hello,使用X509证书".getBytes("UTF-8");
+        KeyStore keyStore = loadKeyStore("my.keystore","456789");
+        DigitalCertificate dc = new DigitalCertificate(keyStore,"yogurt","123456");
+        byte[] miwen = dc.encrypt(msg);
+        byte[] mingwen = dc.decrypt(miwen);
+        System.out.println(new String(mingwen,"UTF-8"));  //hello,使用X509证书
+        byte[] sign = dc.sign(msg);
+        System.out.println(Base64.getEncoder().encodeToString(sign));
+        boolean verify = dc.verify(msg,sign);
+        System.out.println(verify);  //true
+    }
+}
+
+//关于生成keystore文件，命令行下，进入到该代码文件的目录，输入命令
+//keytool -genkeypair -keyalg RSA -keysize 1024 -sigalg SHA1withRSA -validity 36500 -alias yogurt -keystore my.keystore -dname "CN=www.yogurt.com,OU=yogurt,O=yogurt,L=BJ,ST=BJ,C=CN" -keypass 123456 -storepass 456789
+
+//即可生成一个keystore文件
+//可利用
+//keytool -list -keystore my.keystore -storepass 456789
+
+```
+
+
+
+数字证书的应用：
+
+* https：其实是Http over SSL
+  * 服务器发送证书给客户端（证书里包含了  公钥/签名/CA证书）
+  * 客户端验证服务器的证书，以确认服务器身份
+  * 客户端用证书加密一个随机口令（公钥加密），并发送给服务器
+  * 服务器解密获得口令（私钥解密）
+  * 服务器与客户端双方使用AES加密进行通信（对称加密）
+
+
+
+## 多线程
+
+java实现多线程的方法
+
+* 继承Thread类，重写run方法
+* 实现Runnable接口，重写run方法
+
+```java
+public class MyThread extends Thread{
+    @Override
+    public void run(){
+        System.out.println("running...");
+    }
+}
+
+@Test
+public void test(){
+    Thread t = new MyThread();
+    t.start(); //启动线程
+}
+
+@Test
+public void test2(){
+    Thread t = new Thread(new Runnable(){
+        public void run(){
+            System.out.println("running...");
+        } 
+    });
+    t.start();
+}
+```
+
+
+
+小结
+
+* Java中用`Thread`对象表示一个线程，调用`start()`来启动一个线程
+* 一个线程对象只能调用一次`start()`
+* 线程执行时，调用的方法是`run()`
+* 线程调度是由操作系统决定的
+* `Thread.sleep()`可以将当前线程暂停一段时间，单位是毫秒
+* Java线程对象Thread的状态包括：
+  * New
+  * Runnable
+  * Running
+  * Blocked
+  * Waiting
+  * Timed Waiting
+  * Terminated
+
+* 可通过对另一线程对象调用`join()`方法，等待该线程执行结束
+* 当一个类继承了Thread类，可以通过调用`isInterrupted()`来检测线程是否被中断，其他线程可调用该线程对象的`interrupt()`方法来中断该线程。当一个线程处于等待状态时，若其他线程调用其`interrupt()`方法，会导致该线程捕获到`InterruptedException`，此时该线程应立即结束。可以通过一个`volatile`共享变量来进行线程中断。
+
+
+
+### 守护线程
+
+Daemon Thread
+
+* 守护线程是为其他线程提供服务的线程
+* 当所有的**非守护线程**都执行完毕后，JVM会退出
+* **守护线程不能持有任何资源**（如打开了文件）
+* 创建守护线程   `setDaemon(true)`
+
+
+
+### 线程同步
+
+最简单的是使用`synchronized`关键字来进行线程同步，`synchronized`保证了代码块在任意时刻最多只有一个线程来执行（使用同一个锁的前提下）
+
+使用`synchronized`：
+
+* 找出修改共享变量的代码块
+* 选择一个实例作为锁
+* 使用`synchronized(lock){}`
+
+`synchronized`特点
+
+* 由于不支持并发，以及加锁解锁的资源消耗，会降低程序的性能
+* 无需担心`synchronized`代码块中的异常，无论有无异常，在`synchronized`块结束后，都会释放锁
+
+
+
+JVM规范定义的原子操作：
+
+* 基本类型的赋值（long和double除外）
+
+  `int n = 100;`
+
+* 引用类型赋值
+
+  `List<String> list = anotherList;`
+
+原子操作不需要同步，不存在并发问题。
+
+局部变量也不需要同步。
+
+**可以将简单的非原子操作，变为原子操作**：
+
+```java
+//非原子操作
+class Pair{
+    int first;
+    int second;
+    public void set(int first,int second){
+        synchronized(this){
+            this.first = first;
+            this.second = second;
+        }
+    }
+}
+
+//原子操作
+class Pair{
+    int[] pair;
+    public void set(int first,int second){
+        int[] temp = new int[]{first,second};
+        this.pair = temp;  //引用类型赋值是原子操作
+    }
+}
+```
+
+
+
+```java
+class Pair{
+    int count = 0;
+    public void add(int n){
+        //对整个方法加锁
+        synchronized(this){
+            count+=n;
+        }
+    }
+}
+//上面的写法等价于
+class Pair{
+    int count = 0;
+    public synchronized void add(int n){
+            count+=n;
+    }
+}
+```
+
+
+
+线程安全的类：
+
+* 不变的类：`String`， `Integer`，`LocalDate`
+* 没有成员变量的类：`Math`（里面全是静态变量和静态方法）
+* 正确使用了`synchronized`的类：`StringBuffer`
+
+
+
+### `wait`和`notify`
+
+`wait()`只能在`synchronized`代码块中调用
+
+* `wait()`方法被调用时，线程会释放它获得的锁
+* `wait()`方法返回时，线程将重新获得锁
+
+
+
+一个简单的代码示例
+
+```java
+public class TaskList{
+    Queue<String> queue = new LinkedList<>();
+    public synchronized String getTask() throws InterruptedException{
+        while(queue.isEmpty()){
+            System.out.println("Empty List,Thread will wait.");
+            this.wait();
+            System.out.println("New Task comes,Thread will be wakened.");
+        }
+        System.out.println("Avaliable tasks");
+        return this.queue.poll();
+    }
+    
+    public synchronized void addTask(String t){
+        queue.offer(t);
+        this.notify();
+        //notify()只会唤醒一个等待线程
+        //notifyAll()会唤醒全部等待线程
+    }
+    
+    public static void main(String[] args) throws InterruptedException{
+        TaskList list = new TaskList();
+        Thread thread = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    System.out.println(taskList.getTask());
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+        });
+        thread.start();
+        Thread.sleep(2000);
+        list.addTask("Hello,wait and notify");
+    }
+}
+/* output :
+Empty List,Thread will wait.
+New Task comes,Thread will be wakened.
+Avaliable tasks
+Hello,wait and notify
+*/
+
+/*
+通常我们在while循环中调用wait()方法，而不是在if块中调用wait()方法
+
+因为可能同时有多个线程在wait，而此时如果有线程添加了task，调用了notify，会唤醒所有在wait的线程，这些线程会重新竞争this锁，而只有一个线程会成功得到this锁，当这个线程成功取出taskList中的任务后，释放this锁，若wait是在if语句块中调用的，此时，其他线程获取到this锁，继续执行taskList.poll()，就可能因为taskList为空而出错；而若在while块中调用wait()，其他线程获取到this锁后，还会重新判断taskList是否为空
+
+*/
+```
+
+
+
+![](https://i.loli.net/2019/06/30/5d1832cc1c07990771.png)
+
+
+
+小结：
+
+* `wait`和`notify`只能在`synchronized`块中使用
+* 最好在`while`循环中调用`wait()`
+* 调用`wait()`方法时，线程会释放占有的锁
+* 当有线程调用了`notify()`后，所有在等待状态的线程被唤醒，重新竞争锁
+
+
+
+# 附：关于编码<a id="coding"></a>
+
+## ASCII
+
+美国人制定的一套字符集，描述英语中的字符和8位二进制数（1字节）的对应关系，这被称为 ASCII 码。ASCII码共定义了128个字符，使用了8位二进制数中的7位，最高位统一规定为0。128个字符对英语来说足够了，但对于其他语言来说是不够的。大家在0\~127号字符上达成了一致，但对于128\~255号字符，不同国家有不同的定义。并且，亚洲的语言拥有更多的字符，1个字节已经满足不了需求。因此，Unicode诞生了
+
+## Unicode
+
+> Unicode 编码字符集旨在收集全球所有的字符，为每个字符分配唯一的字符编号即代码点（Code Point），用 U+紧跟着十六进制数表示。所有字符按照使用上的频繁度划分为 17 个平面（编号为 0-16），即基本的多语言平面和增补平面。基本的多语言平面（英文为 Basic Multilingual Plane，简称 BMP）又称平面 0，收集了使用最广泛的字符，代码点从 U+0000 到 U+FFFF，每个平面有 216=65536 个码点；增补平面从平面 1~16，分为增补多语言平面（平面 1）、增补象形平面（平面 2）、保留平面（平 3~13）、增补专用平面等，每个增补平面也有 216=65536 个码点。所以 17 个平总计有 17 × 65,536 = 1,114,112 个码点。图 1 是 Unicode 平面分布图，图 2 是 Unicode 各个平面码点空间
+>
+> ​									--来源：IBM
+
+
+
+<center><b>Unicode 17个平面分布   --来源：IBM</b></center>
+
+![Unicode平面](https://www.ibm.com/developerworks/cn/java/unicode-programming-language/image001.jpg)
+
+
+
+<center><b>Unicode 平面分布和码点空间  --来源：IBM</b></center>
+
+![](https://www.ibm.com/developerworks/cn/java/unicode-programming-language/image002.jpg)
+
+
+
+注意：Unicode只是一个字符集，定义了字符与数字的映射关系，但对于计算机中如何存储，没有做任何规定。由于字符数量之大，码点的范围很宽，排在前面的码点，可能用1个字节就能表示，而码点较大的，可能需要2个字节，3个字节，4个字节才能表示。那么计算机如何确定是将1个字节解释为一个字符呢，还是将2个字节连在一起解释为一个字符呢？还是3个，4个字节连在一起为一个字符。于是出现了一些解决方案：
+
+* 取最大的，将所有字符都存储为4个字节（假设4个字节已经足够囊括所有码点），这样计算机固定以4个字节为单位来解释字符编码。但这样会产生极大的空间浪费，对于一篇英文文档，会浪费3倍的空间。
+* 存储表示字节数的信息，让计算机知道该个字符是以几个字节来存储的，如UTF-8编码。
+
+Unicode字符集可以有不同的编码方式，如UTF-8,UTF-16,UTF-32，这里UTF指的是Unicode Transformation Format，即Unicode转换格式，即将Unicode编码空间中每个字符对应的码点，与字节顺序一一映射。
+
+### UTF-8
+
+一种变长编码方式，一般用1-4个字节来编码一个Unicode字符，是目前应用最广泛的一种编码方式。
+
+* 首字节的前几位用以提示编码的字节数
+
+  * 首字节以0开头，表示单字节编码
+  * 首字节以110开头，表示双字节编码，后续字节以10开头
+  * 首字节以1110开头，表示三字节编码，后续字节以10开头
+  * 首字节以11110开头，表示四字节编码，后续字节以10开头
+  * 以此类推...
+
+* 那么在解码时
+
+  * 当读取到一个字节的首位为 0，表示这是一个单字节编码的 ASCII 字符
+  * 当读取到一个字节的首位为 1，表示这是一个多字节编码的字符，如继续读到 1，则确定这是首字节，在继续读取直到遇到 0 为止，一共读取了几个 1，就表示在字符为几个字节的编码
+  * 当读取到一个字节的首位为 1，紧接着读取到一个 0，则该字节是多字节编码的后续字节
+
+  ​									**UTF-8编码方式**   --来源 : IBM
+
+  ![](https://www.ibm.com/developerworks/cn/java/unicode-programming-language/image003.jpg)
+
+
+
+例子：
+
+如中文的 “黄”，查得其Unicode码点为`U+9EC4`，转化为二进制表示则为`1001 1110 1100 0100`，对照上图可知，在UTF-8编码下，这个字符占用3个字节，于是将二进制表示，按顺序从低位到高位插入到各个字节的有效位上（上图中的xxxx），得 “黄” 的 UTF-8编码为`11101001 10111011 10000100`，转为16进制则为 `0xE9BB84`
+
+
+
+UTF-8编码方式的特点
+
+* 优点：变长，节省空间，自动纠错性能好，利于传输
+* 缺点：不利于程序内部处理，如正则表达式检索
+
+<center><b>UTF-8编码方式特点  --来源：IBM</b></center>
+
+![](https://www.ibm.com/developerworks/cn/java/unicode-programming-language/image004.jpg)
+
+说明：
+
+* **自同步**：意思是在传输过程中，若存在字节丢失，或者存在错误的字节序列，也不会影响到其他字节的正常 读取，如读取了一个10xxxx开头的字节，但是找不到首字节，就可以将该字节丢弃
+* **无字节序**：UTF-8的编码单元是1个字节，且多字节编码时，每个字节都有前缀，所以不存在字节序的问题，而像UTF-16，UTF-32，是双字节，四字节编码的，就需要考虑字节序的问题。
+
+
+
+### UTF-16
+
+UTF-16源于UCS-2，UCS-2将字符码点直接映射为字符编码，中间无特别的编码算法。
+
+UCS-2编码方式固定2字节编码，只覆盖了BMP的码点，对于SMP的码点，2字节的16位二进制数是无法表示的。
+
+而UTF-16扩展了原来的UCS-2编码，解决了SMP码点的字符无法表示的问题：
+
+* BMP中的有效码点，用固定2字节16位来为其编码，数值等于对应的码点，同UCS-2
+* SMP中的有效码点，使用**代理对**进行编码。在BMP中，有一个范围的码点是未定义的，被称为**代理区**，其码点范围是`0xD800~0xDFFF`，共2^11^个码点，代理区又被分为**高代理码点**和**低代理码点**，其中高代理码点范围是`0xD800~0XDBFF`，低代理码点范围是`0xDC00~0XDFFF`，高代理码点和低代理码点结合在一起，就表示一个SMP中的字符。由于SMP中的字符共有2^20^个，高代理码点和低代理码点皆有2^10^个取值，两者结合，恰好有2^20^种不同的组合。
+
+
+
+<center><b>UTF-16编码工作方式  --来源：IBM</b></center>
+
+![](https://www.ibm.com/developerworks/cn/java/unicode-programming-language/image007.jpg)
+
+如，汉字 “𠮷” 的Unicode码点为`0x20BB7`，首先用`0x20BB7 - 0x10000`得出超出BMP的部分，得`0x10BB7`，转换为20位二进制，高位不足补0，得`0001 0000 1011 1011 0111`，分为高10位和低10位，高10位加上`0xD800`
+
+```
+1101 1000 0000 0000
+       00 0100 0010
+1101 1000 0100 0010 = 0xD842
+```
+
+低10位加上`0xDC00`
+
+```
+1101 1100 0000 0000
+       11 1011 0111
+1101 1111 1011 0111 = 0xDFB7
+```
+
+所以汉字 “𠮷” 的UTF-16编码为`0xD842 0xDFB7`
+
+JAVA中对于SMP平面的字符，用2个char来表示 （是用UTF-16编码方式的）
+
+```java
+char[] cs = Character.toChars(Integer.parseInt("20BB7",16));
+char high = cs[0];
+char low = cs[1];
+System.out.println(Integer.toHexString(high)); //d842
+System.out.println(Integer.toHexString(low));  //dfb7
+```
+
+
+
+对于辅助平面字符UTF-16编码的转换公式：
+
+```java
+public char[] toUTF16(int codePoint){
+    //注意前面用()括起来，因为+的优先级比>>高
+    //若不用括号的话，就会先计算10+0xD800 ，再做移位操作，得出不正确的结果
+    //而对int进行移位操作，编译器会对移动的位数自动做 mod 32 运算
+    int high = ((codePoint - 0x10000) >> 10) + 0xD800;
+    int low = (codePoint - 0x10000) % 0x400 + 0xDC00;
+    return new char[]{(char)high,(char)low};
+}
+```
+
+
+
+对于汉字 “𠮷” ，其UTF-8编码为
+
+```
+先将码点 0x20BB7 转换为二进制，得
+0010 0000 1011 1011 0111
+根据表，得UTF-8用4个字节来表示该字符
+11110xxx 10xxxxxx 10xxxxxx 10xxxxxx‬
+从低位开始，将码点二进制依次填入x
+
+      00   100000   101110   110111
+11110xxx 10xxxxxx 10xxxxxx 10xxxxxx
+11110000 10100000 10101110 10110111
+F0 A0 AE B7
+```
+
+
+
+在JAVA中进行验证：
+
+```java
+char[] cs = Character.toChars(Integer.parseInt("20BB7",16));
+String s = new String(cs);
+String utf8 = URLEncoder.encode(s,"UTF-8");
+System.out.println(utf8);  // %F0%A0%AE%B7
+```
+
+
+
+### UTF-32
+
+固定以4字节来编码，ISO 10646中称 UTF-32是UCS-4的一个子集。
+
+若用UTF-32来编码，程序处理会比较简单，但是所有字符皆占4个字节，比较浪费空间。
+
+
+
+
+
+一些术语：
+
+* Code Unit：代码单元，指已编码的文本中，最短的比特组合单元。对于UTF-8来说，代码单元是8比特，对UTF-16来说，是16比特，UTF-32，32比特。即，UTF-8以1个字节为最小单位，UTF-16以2个字节为最小单位。
+* BOM（Byte Order Mark）：字节序，出现在文件头部，表示字节顺序。在UCS编码中，有一个叫“ZERO WIDTH NO-BREAK SPACE”字符，其码点为`0xFEFF`，UCS规范建议，在传输字节流时，先传输这个字符，这样，如果接受者收到`FEFF`，表明字节流是Big-Endian（大端字节序），如果接受者收到`FFFE`，表明字节流是Little-Endian（小端字节序）。对UTF-8来说，不需要BOM来表明字节序，但是可以用BOM来表明是UTF-8编码，因为`0xFEFF`的UTF-8编码为`EF BB BF`，若接收者收到`EF BB BF`开头的字节流，就知道这是UTF-8编码的字节流了。
+
+
+
+<center><b>3种编码方式比较</b></center>
+
+| 编码方式   | UTF-8                                           | UTF-16                                                       | UTF-32                                                      |
+| ---------- | ----------------------------------------------- | ------------------------------------------------------------ | ----------------------------------------------------------- |
+| 编码字节数 | 变长，1-4字节，代码单元为8位，1字节             | 2字节或4字节，代码单元为16位，2字节                          | 4字节，代码单元为32位，4字节                                |
+| 优点       | 兼容ASCII码，节省空间，纠错能力强，利于网络传输 | 最早的编码方式，适合内存中的Unicode处理，很多编程语言中作为String类的编码方式 | 固定字节编码，简单，利于程序处理，Unicode码点和编码一一对应 |
+| 缺点       | 变长编码方式不利于程序内部处理                  | 不兼容ASCII，增补平面使用代理对，较为复杂，扩展性差          | 不兼容ASCII，浪费存储空间和网络带宽，扩展性差               |
+| BOM字节序  | 无字节序（可用BOM来表示UTF-8编码）              | 有字节序（UTF-16LE 小端序（FFFE），UTF-16BE 大端序（FEFF）） | 有字节序（UTF-32LE 小端序，UTF-32BE 大端序）                |
+
+
+
+为什么说UTF-8兼容ASCII，而UTF-16和UTF-32不兼容ASCII呢？ASCII中的字符，用UTF-8，UTF-16，UTF-32不都能表示吗？这里说的兼容可以理解为，用不同的编码方式来读取ASCII编码的文件，是否可以正常读取。
+
+试想一个ASCII编码的文件，用UTF-8编码方式来读取，是可以的，因为UTF-8可以是单字节，而UTF-16和UTF-32不行，因为它们至少都是2字节，即最少以2字节解释为一个字符，而ASCII码的代码单元是1字节，这样用UTF-16或UTF-32来解释ASCII编码的文本，即会出现乱码。
+
+
+
+[IBM编码参考文档](https://www.ibm.com/developerworks/cn/java/unicode-programming-language/index.html)
+
+[Understand Big and Little Endian](https://betterexplained.com/articles/understanding-big-and-little-endian-byte-order/)
+
+
+
+[^1]:若数a是素数p的一个原根，则a mod p ，a^2^ mode p，a^3^ mod p，......， a^p-1^ mod p 是各不相同的整数，并且以某种排列方式组成了从1到p-1的所有整数。则，对任一整数b和素数p的一个原根a，可以找到唯一的指数i，使得b = a ^i^ mod p，其中0≤i≤p-1
