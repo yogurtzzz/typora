@@ -2817,6 +2817,129 @@ Hello,wait and notify
 
 
 
+### ReentrantLock
+
+- 可以替代`synchronized`，对对象进行加锁
+- ReentrantLock提供`tryLock`方法尝试获取锁，可以指定超时
+- 必须用`try..finally..`块，保证锁的正确获取和释放（在try代码块之前获取锁，在finally中释放锁）
+
+
+
+### ReadWriteLock
+
+ReadWriteLock可以解决
+
+* 同一时刻只允许一个线程写
+* 没有发生写操作时，允许多个线程同时读
+
+代码示例
+
+```java
+class Counter{
+    final ReadWriteLock lock = new ReentrantReadWriteLock();
+    final Lock rLock = lock.readLock();
+    final Lock wLock = lock.writeLock();
+    private int value = 0;
+    public void incre(){
+        wLock.lock();
+        try{
+            value += 1;
+        }finally{
+            wLock.unlock();
+        }
+    }
+    public int get(){
+        rLock.lock();
+        try{
+            return value;
+        }finally{
+            rLock.unlock();
+        }
+    }
+}
+```
+
+
+
+小结
+
+* ReadWriteLock只允许一个线程写入
+* ReadWriteLock允许多个线程同时读取
+* ReadWriteLock适合读多写少的场景
+
+
+
+### Condition
+
+Conditio和ReentrantLock配合，可以实现synchronized中wait和notify的效果
+
+* Condition可以替代wait和notify
+* Condition对象必须从ReentrantLock对象获取
+* ReentrantLock+Condition可以替代synchronized+wait/notify
+
+
+
+代码示例
+
+```java
+class TaskList{
+    final Queue<String> queue = new LinkedList<>();
+    final Lock lock = new ReentrantLock();
+    final Condition con = lock.newCondition();
+    
+public String getTask() throws InterruptedException{
+    lock.lock();
+    try{
+        while(this.queue.isEmpty()){
+            con.await();
+        }
+        return queue.poll();
+    }finally{
+        lock.unlock();
+    }
+}
+    public void addTask(String t){
+        lock.lock();
+        try{
+            this.queue.offer(t);
+            con.signalAll();
+        }finally{
+            lock.unlock();
+        }
+    }
+}
+```
+
+### Blocking Queue
+
+`java.util.concurrent`中提供了线程安全的Blocking集合
+
+| Interface | Non-Thread Safe        | Thread Safe                              |
+| --------- | ---------------------- | ---------------------------------------- |
+| List      | ArrayList              | CopyOnWriteArrayList                     |
+| Map       | HashMap                | ConcurrentHashMap                        |
+| Set       | HashSet，TreeSet       | CopyOnWriteArraySet                      |
+| Queue     | ArrayDeque，LinkedList | ArrayBlockingQueue , LinkedBlockingQueue |
+| Deque     | ArrayDeque，LinkedList | LinkedBlockingDeque                      |
+
+另：`java.util.Collections`提供了线程安全集合转换：
+
+`Map unsafeMap = new HashMap();`
+
+`Map safeMap = Collections.synchronizedMap(unsafeMap);`
+
+实际仅仅是对所有的方法加上了`synchronized`关键字，性能很低，不推荐使用。用`java.util.concurrent`包下提供的类就好
+
+*关于Copy On Write*[^2]
+
+
+
+### Atmoic
+
+`java.util.concurrent.atomic`提供了一组原子操作的类型
+
+
+
 # 附：关于编码<a id="coding"></a>
 
 ## ASCII
@@ -2832,13 +2955,11 @@ Hello,wait and notify
 
 
 <center><b>Unicode 17个平面分布   --来源：IBM</b></center>
-
 ![Unicode平面](https://www.ibm.com/developerworks/cn/java/unicode-programming-language/image001.jpg)
 
 
 
 <center><b>Unicode 平面分布和码点空间  --来源：IBM</b></center>
-
 ![](https://www.ibm.com/developerworks/cn/java/unicode-programming-language/image002.jpg)
 
 
@@ -2886,7 +3007,6 @@ UTF-8编码方式的特点
 * 缺点：不利于程序内部处理，如正则表达式检索
 
 <center><b>UTF-8编码方式特点  --来源：IBM</b></center>
-
 ![](https://www.ibm.com/developerworks/cn/java/unicode-programming-language/image004.jpg)
 
 说明：
@@ -2910,7 +3030,6 @@ UCS-2编码方式固定2字节编码，只覆盖了BMP的码点，对于SMP的�
 
 
 <center><b>UTF-16编码工作方式  --来源：IBM</b></center>
-
 ![](https://www.ibm.com/developerworks/cn/java/unicode-programming-language/image007.jpg)
 
 如，汉字 “𠮷” 的Unicode码点为`0x20BB7`，首先用`0x20BB7 - 0x10000`得出超出BMP的部分，得`0x10BB7`，转换为20位二进制，高位不足补0，得`0001 0000 1011 1011 0111`，分为高10位和低10位，高10位加上`0xD800`
@@ -3004,7 +3123,6 @@ System.out.println(utf8);  // %F0%A0%AE%B7
 
 
 <center><b>3种编码方式比较</b></center>
-
 | 编码方式   | UTF-8                                           | UTF-16                                                       | UTF-32                                                      |
 | ---------- | ----------------------------------------------- | ------------------------------------------------------------ | ----------------------------------------------------------- |
 | 编码字节数 | 变长，1-4字节，代码单元为8位，1字节             | 2字节或4字节，代码单元为16位，2字节                          | 4字节，代码单元为32位，4字节                                |
@@ -3026,4 +3144,12 @@ System.out.println(utf8);  // %F0%A0%AE%B7
 
 
 
+
+
+
+
 [^1]:若数a是素数p的一个原根，则a mod p ，a^2^ mode p，a^3^ mod p，......， a^p-1^ mod p 是各不相同的整数，并且以某种排列方式组成了从1到p-1的所有整数。则，对任一整数b和素数p的一个原根a，可以找到唯一的指数i，使得b = a ^i^ mod p，其中0≤i≤p-1
+
+
+
+[^2]: 写时复制。通俗的解释是，当往一个容器里添加元素时，不是直接添加，而是先copy一份副本，在副本容器里添加元素，添加完后，再将旧的容器的引用指向这个新的副本容器。这样做的好处是可以对CopyOnWrite容器进行并发的读，而不需要加锁，将读写分离。（正在执行写操作时，也不影响读，不过读到的是旧数据）。Copy-On-Write适用于**读多写少**的场景，如电商网站上的商品类目。Copy-On-Write在写时，会占用2倍的内存，并且只能保证数据最终一致，不能保证数据的实时一致。
