@@ -2908,8 +2908,11 @@ public String getTask() throws InterruptedException{
 }
 ```
 
+<<<<<<< HEAD
 
 
+=======
+>>>>>>> 6c8399ee7e05baa25b21dc1bf8e7616de2ce0809
 ### Blocking Queue
 
 `java.util.concurrent`中提供了线程安全的Blocking集合
@@ -2938,6 +2941,7 @@ public String getTask() throws InterruptedException{
 
 `java.util.concurrent.atomic`提供了一组原子操作的类型
 
+<<<<<<< HEAD
 * `AtomicInteger`
 
   `int addAndGet(int inc)`
@@ -3178,6 +3182,9 @@ ThreadLocal的适用场景：
 ThreadLocal 适用于每个线程需要自己独立的实例且该实例需要在多个方法中被使用，也即变量在线程间隔离而在方法或类间共享的场景
 
 核心
+=======
+
+>>>>>>> 6c8399ee7e05baa25b21dc1bf8e7616de2ce0809
 
 # 附：关于编码<a id="coding"></a>
 
@@ -3383,17 +3390,28 @@ System.out.println(utf8);  // %F0%A0%AE%B7
 
 
 
+<<<<<<< HEAD
 [^1]:若数a是素数p的一个原根，则a mod p ，a^2^ mode p，a^3^ mod p，......， a^p-1^ mod p 是各不相同的整数，并且以某种排列方式组成了从1到p-1的所有整数。则，对任一整数b和素数p的一个原根a，可以找到唯一的指数i，使得b = a ^i^ mod p，其中0≤i≤p-1
 [^2]: 写时复制。通俗的解释是，当往一个容器里添加元素时，不是直接添加，而是先copy一份副本，在副本容器里添加元素，添加完后，再将旧的容器的引用指向这个新的副本容器。这样做的好处是可以对CopyOnWrite容器进行并发的读，而不需要加锁，将读写分离。（正在执行写操作时，也不影响读，不过读到的是旧数据）。Copy-On-Write适用于**读多写少**的场景，如电商网站上的商品类目。Copy-On-Write在写时，会占用2倍的内存，并且只能保证数据最终一致，不能保证数据的实时一致。
 
 
 
+=======
+>>>>>>> 6c8399ee7e05baa25b21dc1bf8e7616de2ce0809
 
 
 
 
+<<<<<<< HEAD
 
 
 所有类的父类都是Object，但是为什么没法直接调用`clone()`
 
 https://blog.csdn.net/qq_38962004/article/details/79720416
+=======
+[^1]:若数a是素数p的一个原根，则a mod p ，a^2^ mode p，a^3^ mod p，......， a^p-1^ mod p 是各不相同的整数，并且以某种排列方式组成了从1到p-1的所有整数。则，对任一整数b和素数p的一个原根a，可以找到唯一的指数i，使得b = a ^i^ mod p，其中0≤i≤p-1
+
+
+
+[^2]: 写时复制。通俗的解释是，当往一个容器里添加元素时，不是直接添加，而是先copy一份副本，在副本容器里添加元素，添加完后，再将旧的容器的引用指向这个新的副本容器。这样做的好处是可以对CopyOnWrite容器进行并发的读，而不需要加锁，将读写分离。（正在执行写操作时，也不影响读，不过读到的是旧数据）。Copy-On-Write适用于**读多写少**的场景，如电商网站上的商品类目。Copy-On-Write在写时，会占用2倍的内存，并且只能保证数据最终一致，不能保证数据的实时一致。
+>>>>>>> 6c8399ee7e05baa25b21dc1bf8e7616de2ce0809
