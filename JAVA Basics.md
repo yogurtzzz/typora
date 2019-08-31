@@ -1592,7 +1592,7 @@ try(ObjectInputStream in = new ObjectInputStream(...)){
     Person p2 = (Person) in.readObject();
     //readObject()可能抛出异常： ClassNotFoundException，InvalidClassException
     
-    //ClassNotFoundException：机器A的JAVA程序传递给机器B的JAVA程序，A中有定义Person类，而B中没定义Persion类，就会报这个错
+    //ClassNotFoundException：机器A的JAVA程序传递给机器B的JAVA程序，A中有定义Person类，而B中没定义Person类，就会报这个错
     //InvalidClassException：机器A定义的Person对象有一个int age，机器B定义的Person中时long age，则会报这个错，Class不匹配
 }
 ```
@@ -1833,15 +1833,13 @@ Locale
 
 
 
-计算机使用`Epoch Time`来存储时间
+计算机使用`Epoch Time`来存储时间，同一时刻，无论是在哪个时区，在计算机里存储的**时间戳**，都是相同的。
 
-Epoch Time：从1970年1月1日零点（格林威治时间/GMT+00:00）到现在经历的秒数，如
+Epoch Time（又称时间戳，Timestamp）：从1970年1月1日零点（格林威治时间/GMT+00:00）到现在经历的毫秒数，如
 
 * 北京2016-11-20 8:15:01 = 1479600901
 
 * 伦敦2016-11-20 0:15:01 = 1479600901
-
-Epoch Time又称时间戳，Timestamp
 
 
 
@@ -1878,7 +1876,7 @@ JAVA API:
 
   * 不能转换时区
   * 日期和时间的加减，难以计算
-  * 两个日期相差多少天，难以计算
+  * 两个日期相差多少天，难以计算（可以转换为时间戳来比较）
   * 某个月的第一个星期一，难以计算
 
 * `java.util.Calendar`
@@ -1918,7 +1916,7 @@ JAVA API:
 新的API特点：
 
 * 严格区分日期，时间
-* 是不可变对象（类String）
+* 是不可变对象（类似于String）
 * Month范围为1~12（一月到十二月）
 * Week范围1~7（周一到周日）
 
@@ -2817,6 +2815,370 @@ Hello,wait and notify
 
 
 
+### ReentrantLock
+
+- 可以替代`synchronized`，对对象进行加锁
+- ReentrantLock提供`tryLock`方法尝试获取锁，可以指定超时
+- 必须用`try..finally..`块，保证锁的正确获取和释放（在try代码块之前获取锁，在finally中释放锁）
+
+
+
+### ReadWriteLock
+
+ReadWriteLock可以解决
+
+* 同一时刻只允许一个线程写
+* 没有发生写操作时，允许多个线程同时读
+
+代码示例
+
+```java
+class Counter{
+    final ReadWriteLock lock = new ReentrantReadWriteLock();
+    final Lock rLock = lock.readLock();
+    final Lock wLock = lock.writeLock();
+    private int value = 0;
+    public void incre(){
+        wLock.lock();
+        try{
+            value += 1;
+        }finally{
+            wLock.unlock();
+        }
+    }
+    public int get(){
+        rLock.lock();
+        try{
+            return value;
+        }finally{
+            rLock.unlock();
+        }
+    }
+}
+```
+
+
+
+小结
+
+* ReadWriteLock只允许一个线程写入
+* ReadWriteLock允许多个线程同时读取
+* ReadWriteLock适合读多写少的场景
+
+
+
+### Condition
+
+Conditio和ReentrantLock配合，可以实现synchronized中wait和notify的效果
+
+* Condition可以替代wait和notify
+* Condition对象必须从ReentrantLock对象获取
+* ReentrantLock+Condition可以替代synchronized+wait/notify
+
+
+
+代码示例
+
+```java
+class TaskList{
+    final Queue<String> queue = new LinkedList<>();
+    final Lock lock = new ReentrantLock();
+    final Condition con = lock.newCondition();
+    
+public String getTask() throws InterruptedException{
+    lock.lock();
+    try{
+        while(this.queue.isEmpty()){
+            con.await();
+        }
+        return queue.poll();
+    }finally{
+        lock.unlock();
+    }
+}
+    public void addTask(String t){
+        lock.lock();
+        try{
+            this.queue.offer(t);
+            con.signalAll();
+        }finally{
+            lock.unlock();
+        }
+    }
+}
+```
+
+
+
+### Blocking Queue
+
+`java.util.concurrent`中提供了线程安全的Blocking集合
+
+| Interface | Non-Thread Safe        | Thread Safe                              |
+| --------- | ---------------------- | ---------------------------------------- |
+| List      | ArrayList              | CopyOnWriteArrayList                     |
+| Map       | HashMap                | ConcurrentHashMap                        |
+| Set       | HashSet，TreeSet       | CopyOnWriteArraySet                      |
+| Queue     | ArrayDeque，LinkedList | ArrayBlockingQueue , LinkedBlockingQueue |
+| Deque     | ArrayDeque，LinkedList | LinkedBlockingDeque                      |
+
+另：`java.util.Collections`提供了线程安全集合转换：
+
+`Map unsafeMap = new HashMap();`
+
+`Map safeMap = Collections.synchronizedMap(unsafeMap);`
+
+实际仅仅是对所有的方法加上了`synchronized`关键字，性能很低，不推荐使用。用`java.util.concurrent`包下提供的类就好
+
+*关于Copy On Write*[^2]
+
+
+
+### Atmoic
+
+`java.util.concurrent.atomic`提供了一组原子操作的类型
+
+* `AtomicInteger`
+
+  `int addAndGet(int inc)`
+
+  `int incrementAndGet()`
+
+  `int compareAndSet(int expect,int update)`
+
+  
+
+使用Atomic类可以实现**无锁**的线程安全访问，其基本原理是CAS，适用于计数器，累加器...
+
+
+
+### 线程池
+
+由于创建和销毁线程是有比较大的开销的，一般在多线程程序中，使用**线程池**的技术来维护管理线程，这样减小了线程频繁创建和销毁的性能开销，提高了响应速度，也便于线程的管理，其大概原理是
+
+* 线程池里预先创建好一些线程，等待执行任务
+* 若有新任务，则分配一个空闲的线程去执行
+* 若无空闲线程，则将新任务放入等待队列，空闲线程会从等待队列中取出任务执行
+* 若无空闲线程，且等待队列已满，则采用任务拒绝策略，拒绝接受新的任务
+
+
+
+Java中线程池的核心类是`ThreadPoolExecutor`，其类图结构为：
+
+```mermaid
+graph BT
+A(Executor)
+B(ExecutorService)
+C(AbstractExecutorService)
+D(ThreadPoolExecutor)
+D-->C
+C-->B
+B-->A
+```
+
+日常开发使用时，一般用`Executors`提供的几个预设线程池即可
+
+* `Executors.newSingleThreadPool()`
+
+  * 相当于corePoolSize为1的FixedThreadPool
+
+* `Executors.newCachedThreadPool()`
+
+  * corePoolSize = 0 ，maxPoolSize = Integer.MAX_VALUE
+  * 使用SynchronousQueue作为等待队列
+
+* `Executors.newFixedThreadPool()`
+
+  * corePoolSize 和 maxPoolSize相等
+  * 使用LinkedBlockQueue作为等待队列，无界的等待队列
+
+* `Executors.newScheduledThreadPool()`
+
+  用来处理延时任务，或周期定时任务，它有两种模式
+
+  * Fixed Rate ：每隔一定时间执行任务
+  * Fixed Delay：每次执行完一个任务，等待一定时间，再执行下一个任务
+
+[线程池参考链接](https://www.cnblogs.com/dolphin0520/p/3932921.html)
+
+
+
+### Future
+
+`Future<V>`表示一个未来可能返回的结果
+
+提交一个`Callable`任务，可以获取一个Future对象，用于在未来的某个时刻获取结果，调用Future
+
+的get方法来获取异步执行的结果，但是这个方法可能会阻塞
+
+提交一个`Runnable`任务，无法获取任务的返回值
+
+[Future参考链接](https://www.cnblogs.com/dolphin0520/p/3949310.html)
+
+
+
+### CompletableFuture
+
+由于使用Future获取异步任务的执行结果时，会阻塞。而我们期望，当异步任务执行结束后，能够自动地获取执行的结果，这时，可以使用`CompletableFuture`接口，当任务执行完后，会自动调用**回调函数**
+
+它的优点：
+
+* 异步任务结束时，会自动回调某个方法
+* 异步任务发生异常时，会自动回调另外某个方法
+* 设置好回调函数后，无需再关心异步任务的执行
+
+代码示例：
+
+```java
+public class YogurtSupplier implements Supplier {
+    @Override
+    public String get() {
+        System.out.println("Sleep for 2s");
+        try {
+            Thread.sleep(2000);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+        return "Hello,CompletableFuture";
+    }
+}
+
+public static void main(String[] args){
+  Supplier<String> task = new YogurtSupplier();
+  CompletableFuture<String> completableFuture = CompletableFuture.supplyAsync(task);
+  completableFuture.thenAccept(new Consumer<String>() {
+      @Override
+      public void accept(String s) {
+          System.out.println("回调函数被调用："+s);
+      }
+  });
+  completableFuture.exceptionally(new Function<Throwable, String>() {
+      @Override
+      public String apply(Throwable throwable) {
+          System.out.println("异常触发："+throwable.getMessage());
+          return "error";
+      }
+  });
+  completableFuture.join();
+}
+```
+
+
+
+多个`CompletableFuture`可以串行执行
+
+```java
+CompletableFuture<String> c1 = CompletableFuture.supplyAsync(task1);
+CompletableFuture<Integer> c2 = c1.thenApplyAsync(task2);
+CompletableFuture<Integer> c3 = c2.thenApplyAsync(task3);
+```
+
+
+
+多个`CompletableFuture`可以并行执行
+
+如，同时从2个url获取某一相同数据
+
+* 任意一个任务首先返回时，即获得结果，使用`CompletableFuture`的`anyOf`方法，将2个`CompletableFuture`合并成1个
+* 2个任务都返回时，获取结果，使用`allOf`方法，合并后的`CompletableFuture`的泛型参数只能是`Void`
+
+
+
+小结
+
+`CompletableFuture`可以指定异步处理的流程
+
+* `thenAccept（）`回调函数，处理正常返回的结果
+* `exceptional()` 回调函数，处理异常的结果
+* `thenApplyAsync()`串行化另一个`CompletableFuture`
+* `anyOf() / allOf()` 并行化2个`CompletableFuture`
+
+
+
+### Fork / Join
+
+Fork / Join线程池可以执行一种特殊的任务：把一个大任务拆分成多个小任务并行执行，JDK >= 1.7
+
+如，计算一个很长的数组的和，可以将长数组拆分成2个小数组，2个小数组分别求和
+
+![](https://i.loli.net/2019/07/01/5d1a11e38607132545.png)
+
+代码示例：
+
+```java
+class SumTask extends RecursiveTask<Long>{
+    static final long THRESHOLD = 500;
+    long[] arr;
+    int start;
+    int end;
+    SumTask(long[] arr,int start,int end){
+        this.arr = arr;
+        this.start = start;
+        this.end = end;
+    }
+    @Override
+    protected Long compute() {
+        if(end - start <= THRESHOLD){
+            long sum = 0;
+            for (int i = start; i < end ; i++){
+                sum += arr[i];
+            }
+            return sum;
+        }
+        int mid = (start + end) / 2;
+        SumTask t1 = new SumTask(arr,start,mid);
+        SumTask t2 = new SumTask(arr,mid,end);
+        invokeAll(t1,t2);
+        Long result1 = t1.join();
+        Long result2 = t2.join();
+        return result1 + result2;
+    }
+}
+
+public static void main(String[] args){
+        long[] arr = new long[10000];
+        long expSum = 0;
+        for(int i = 0;i < 10000; i++){
+            arr[i] = (long) (Math.random()*1000);
+            expSum += arr[i];
+        }
+        System.out.println("expected sum : " + expSum);
+
+        ForkJoinTask<Long> task = new SumTask(arr,0,arr.length);
+        long st = System.currentTimeMillis();
+        Long res = ForkJoinPool.commonPool().invoke(task);
+        long et = System.currentTimeMillis();
+        System.out.println("Fork Join Sum:" + res + " in " + (et - st) +" ms");
+}
+```
+
+Fork/Join模式在`java.util.Arrays.parallelSort()`中也有应用
+
+
+
+
+
+### ThreadLocal
+
+域
+
+* `final int threadLocalHashCode = nextHashCode()`
+* `static AtomicInteger nextHashCode = new AtomicInteger()`
+* `static final int HASH_INCREMENT = 0x61c88647`
+* `static class ThreadLocalMap`
+  * `static class Entry extends WeakReference<ThreadLocal<?>>`
+    * `Object value`
+  * `static final int INITIAL_CAPACITY = 16`
+  * `Entry[] table`
+  * `int size = 0`
+  * `int threshold`
+
+ThreadLocal的适用场景：
+
+ThreadLocal 适用于每个线程需要自己独立的实例且该实例需要在多个方法中被使用，也即变量在线程间隔离而在方法或类间共享的场景
+
+核心
+
 # 附：关于编码<a id="coding"></a>
 
 ## ASCII
@@ -2832,13 +3194,11 @@ Hello,wait and notify
 
 
 <center><b>Unicode 17个平面分布   --来源：IBM</b></center>
-
 ![Unicode平面](https://www.ibm.com/developerworks/cn/java/unicode-programming-language/image001.jpg)
 
 
 
 <center><b>Unicode 平面分布和码点空间  --来源：IBM</b></center>
-
 ![](https://www.ibm.com/developerworks/cn/java/unicode-programming-language/image002.jpg)
 
 
@@ -2886,7 +3246,6 @@ UTF-8编码方式的特点
 * 缺点：不利于程序内部处理，如正则表达式检索
 
 <center><b>UTF-8编码方式特点  --来源：IBM</b></center>
-
 ![](https://www.ibm.com/developerworks/cn/java/unicode-programming-language/image004.jpg)
 
 说明：
@@ -2910,7 +3269,6 @@ UCS-2编码方式固定2字节编码，只覆盖了BMP的码点，对于SMP的�
 
 
 <center><b>UTF-16编码工作方式  --来源：IBM</b></center>
-
 ![](https://www.ibm.com/developerworks/cn/java/unicode-programming-language/image007.jpg)
 
 如，汉字 “𠮷” 的Unicode码点为`0x20BB7`，首先用`0x20BB7 - 0x10000`得出超出BMP的部分，得`0x10BB7`，转换为20位二进制，高位不足补0，得`0001 0000 1011 1011 0111`，分为高10位和低10位，高10位加上`0xD800`
@@ -3004,7 +3362,6 @@ System.out.println(utf8);  // %F0%A0%AE%B7
 
 
 <center><b>3种编码方式比较</b></center>
-
 | 编码方式   | UTF-8                                           | UTF-16                                                       | UTF-32                                                      |
 | ---------- | ----------------------------------------------- | ------------------------------------------------------------ | ----------------------------------------------------------- |
 | 编码字节数 | 变长，1-4字节，代码单元为8位，1字节             | 2字节或4字节，代码单元为16位，2字节                          | 4字节，代码单元为32位，4字节                                |
@@ -3027,3 +3384,16 @@ System.out.println(utf8);  // %F0%A0%AE%B7
 
 
 [^1]:若数a是素数p的一个原根，则a mod p ，a^2^ mode p，a^3^ mod p，......， a^p-1^ mod p 是各不相同的整数，并且以某种排列方式组成了从1到p-1的所有整数。则，对任一整数b和素数p的一个原根a，可以找到唯一的指数i，使得b = a ^i^ mod p，其中0≤i≤p-1
+[^2]: 写时复制。通俗的解释是，当往一个容器里添加元素时，不是直接添加，而是先copy一份副本，在副本容器里添加元素，添加完后，再将旧的容器的引用指向这个新的副本容器。这样做的好处是可以对CopyOnWrite容器进行并发的读，而不需要加锁，将读写分离。（正在执行写操作时，也不影响读，不过读到的是旧数据）。Copy-On-Write适用于**读多写少**的场景，如电商网站上的商品类目。Copy-On-Write在写时，会占用2倍的内存，并且只能保证数据最终一致，不能保证数据的实时一致。
+
+
+
+
+
+
+
+
+
+所有类的父类都是Object，但是为什么没法直接调用`clone()`
+
+https://blog.csdn.net/qq_38962004/article/details/79720416

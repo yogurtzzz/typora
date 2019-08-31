@@ -1,0 +1,110 @@
+SqlSessionFactoryBuilder#build ：用于构建SqlSessionFactory对象
+	|--XMLConfigBuilder#构造函数：用来解析全局文件文件的解析器
+		|--XPathParser#构造函数：用来使用XPath语法解析XML的解析器
+			|--XPathParser#createDocument()：解析全局配置文件，封装为Document对象（封装一些子节点，使用XPath语法解析获取）
+		|--Configuration#构造函数：创建Configuration对象，同时初始化内置类的别名
+	|--XMLConfigBuilder#parse():全局配置文件的解析器
+		|--XPathParser#evalNode(xpath语法):XPath解析器，专门用来通过Xpath语法解析XML返回XNode节点
+		
+		|--XMLConfigBuilder#parseConfiguration(XNode):从全局配置文件根节点开始解析，加载的信息设置到Configuration对象中
+	|--SqlSessionFactoryBuilder#build：创建SqlSessionFactory接口的默认实现类DefaultSqlSessionFactory（Configuration对象）
+	
+总结：
+	1.SqlSessionFactoryBuilder创建SqlsessionFactory时，需要传入一个Configuration对象。
+	2.XMLConfigBuilder对象会去实例化Configuration。
+	3.XMLConfigBuilder对象会去初始化Configuration对象。
+		通过XPathParser去解析全局配置文件，形成Document对象
+		通过XPathParser去获取指定节点的XNode对象。
+		解析Xnode对象的信息，然后封装到Configuration对象中
+
+==========================================================================================
+XMLConfigBuilder#mapperElement:解析全局配置文件中的<mappers>标签
+	|--XMLMapperBuilder#构造方法：专门用来解析映射文件的
+		|--XPathParser#构造方法：
+			|--XPathParser#createDocument()：创建Mapper映射文件对应的Document对象
+			|--MapperBuilderAssistant#构造方法：用于构建MappedStatement对象的
+	|--XMLMapperBuilder#parse()：
+		|--XMLMapperBuilder#configurationElement("mapper")：专门用来解析mapper映射文件
+			|--XMLMapperBuilder#buildStatementFromContext：用来创建MappedStatement对象的(insert | update | delete | select)
+				|--XMLMapperBuilder#buildStatementFromContext
+					|--XMLStatementBuilder#构造方法：专门用来解析MappedStatement
+					|--XMLStatementBuilder#parseStatementNode:
+						|--MapperBuilderAssistant#addMappedStatement:创建MappedStatement对象
+							|--MappedStatement.Builder#构造方法
+							|--MappedStatement#build方法：创建MappedStatement对象，并存储到Configuration对象中
+
+========================================================================================
+SQL解析流程（每次解析一个标签（select | insert | delete | update ））
+XMLStatementBuilder # parseStatementNode 方法内（此时正在解析mapper.xml中的select | update | insert | delete 标签）
+SqlSource sqlSource = langDriver.createSqlSource(this.configuration, this.context, parameterTypeClass);（入口）
+实际是调用的
+XMLLanguageDriver # createSqlSource
+  |-- XMLScriptBuilder 构造方法（新建一个对象）
+     |-- 里面新建了Configuration对象，并初始化了动态sql标签处理器
+     |-- iniNodeHandlerMap()
+  |-- XMLScriptBuilder # parseScriptNode
+     |-- XMLScriptBuilder # parseDynamicTags(this.context)   
+      # 第一次进来时，context这里就是select | insert | delete | update 这些标签。
+      # 这里解析的结果是一个MixedSqlNode，MixSqlNode里面包含一个List<SqlNode> contents,记录了当前节点下的所有子节点
+      
+        |-- 获取该节点的所有子节点（节点可能是元素节点，属性节点，文本节点etc），并且遍历
+        |-- 如果当前子节点是元素节点（动态sql标签），获取对应的nodeHandler，并将isDynamic设为true，调用nodeHandler.handlerNode进行处理
+            |-- NodeHandler.handleNode()  这里会调用parseDynamicTags（递归调用），然后将节点添加到List<SqlNode> contents里（以便最后封装成MixedSqlNode）
+        |-- 否则，将当前子节点按照文本节点处理。获取节点的body，并封装成TextSqlNode
+            |-- 调用TextSqlNode.isDynamic()
+               |-- 创建一个分词器，用来解析文本内容里是否有 "${}" ,若解析到有"${}"，会返回true，否则返回false
+            |-- 若TextSqlNode.isDynamic为true （即文本中包含${}），则将当前XMLScriptBuilder中的isDynamic设为true，并将TextSqlNode添加到List<SqlNode> Contents
+            |-- 若TextSqlNode.isDynamic为false（即文本中不包含${}），则将TextSqlNode封装成StaticTextSqlNode，添加到List<SqlNode> contents
+        |-- 以当前的List<SqlNode> contents，构建MixedSqlNode并返回
+        
+     |-- 根据是否动态（isDynamic），将上面的MixedSqlNode封装成DynamicSqlSource，或者RawSqlSource，并返回
+     
+  RawSqlSource # 构造方法
+    |-- SqlSourceBuilder # parse    # 这里将静态sql进行解析，会有对#{}的解析
+      |-- SqlSourceBuilder.ParameterMappingTokenHandler 分词器，创建一个GenericTokenParser，解析#{}，ParameterMappingTokenHandler中将#{}替换为?,设置ParameterMapping
+      |-- 将sql字符串，ParameterMapping，configuration，封装成一个StaticSqlSource，并设置到RawSqlSource上
+      
+===========================
+Mapper获取流程
+SqlSession # getMapper
+  |-- Configuration # getMapper
+     |-- 从当前configuration的mapperRegistry中取    mapperRegistry # getMapper(Class type,SqlSession session);
+        |-- knownMappers.get(type)  # 从已知的mappers中获取到该mapper对应的MapperProxyFactory
+        |-- MapperProxyFactory # newInstance(SqlSession)
+           |-- 创建一个 MapperProxy 对象（MapperProxy 实现了InvocationHandler）
+           |-- 调用Proxy.newProxyInstance  生成JDK代理对象
+           
+           
+=============================
+执行SQL查询流程
+入口：DefaultSqlSession # selectList(String statement,Object param)
+   |--  先根据statement，去configuration中获取对应的MappedStatement
+   |--  再调用executor的query方法，执行mappedStatement （这里是交由CachingExecutor来执行，可参见源代码）
+       |-- 若开启了缓存，且缓存中有，则直接取出来，否则，交给代理类（SimpleExecutor）去执行查询
+       |-- CachingExecutor # delegate.query   （交由代理去执行，这里是SimpleExecutor,其实执行了BaseExecutor，因为SimpleExecutor继承自BaseExecutor）
+       |-- BaseExecutor # query
+          |-- BaseExecutor # queryFromDatabase
+              |-- this.doQuery   #这个方法是abstract的，是个钩子方法，这里会调用SimpleExecutor中的实现
+              |-- SimpleExecutor # doQuery
+                |-- Configuration.newStatementHandler  # 取出MappedStatement中的Configuration 
+                   |-- RoutingStatementHandler # 构造方法 会根据MappedStatement的类型，来设置当前的delegate为SimpleStatementHandler，PreparedStatementHandler，CallableStatementHandler(在构建MappedStatement时，默认是采用Prepared)
+                   |-- interceptorChain.pluginAll(RoutingStatementHandler)  #添加拦截器
+                |-- this.prepareStatement(statementHandler)  #  封装成一个Statement ,stmt
+                  |-- prepare()  # 准备Statement
+                  |-- parameterize() # 参数绑定
+                |-- RoutingStatementHandler.query(stmt,resultHandler)
+                  |-- this.delegate.query  # 会调用PreparedStatementHandler去处理
+                  |-- PreparedStatementHandler # execute()
+                  |-- resultHandler.handleResultSets()
+                  
+=================
+参数绑定流程
+入口：PreparedStatementHandler  # parameterize
+   |-- DefaultParameterHandler # setParameters(PreparedStatement ps)
+     |-- BaseTypeHandler # setParameter
+       |-- xxTypeHandler # setNonNullParameter  # 调用PreparedStatement的setxxx方法
+                
+                
+============
+结果集映射
+入口：DefaultResultSetHandler # handleResultSets
