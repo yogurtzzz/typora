@@ -193,3 +193,64 @@ public class MyTest {
 
 `@Test(timeout=1000)`   注意这里的单位是毫秒，故设置了超时为1秒
 
+
+
+## Suite
+
+当存在多个测试用例的`class`时，可以使用JUnit提供的Suite来一次性测试所有的测试用例，如下
+
+```java
+import org.junit.Before;
+import org.junit.Test;
+
+//TDD  Test Driven Development 测试驱动开发
+public class BeanFactoryTest {
+    private DefaultBeanFactory beanFactory;
+    private XMLBeanDefinitionParser parser;
+    @Before
+    public void init(){
+       
+    }
+    @Test
+    public void testGetBean(){
+        //测试正常情况，获取bean
+    }
+    @Test
+    public void testInvalidBean(){
+        //bean创建过程出错
+    }
+    @Test
+    public void testInvalidXML(){
+        //XML解析出错
+    }
+}
+
+```
+
+```java
+import org.junit.Test;
+
+public class ApplicationContextTest {
+
+    @Test
+    public void testGetBean(){
+    }
+}
+
+```
+
+可以创建一个`class`文件，来测试全部的测试用例
+
+```java
+import org.junit.runner.RunWith;
+import org.junit.runners.Suite;
+
+//使用Suite来一次性执行所有的Test
+//直接运行这一个类即可
+@RunWith(Suite.class)
+@Suite.SuiteClasses({BeanFactoryTest.class, ApplicationContextTest.class})
+public class AllTest {
+}
+
+```
+
