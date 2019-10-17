@@ -2621,10 +2621,15 @@ public void test2(){
 小结
 
 * Java中用`Thread`对象表示一个线程，调用`start()`来启动一个线程
+
 * 一个线程对象只能调用一次`start()`
+
 * 线程执行时，调用的方法是`run()`
+
 * 线程调度是由操作系统决定的
+
 * `Thread.sleep()`可以将当前线程暂停一段时间，单位是毫秒
+
 * Java线程对象Thread的状态包括：
   * New
   * Runnable
@@ -2634,7 +2639,12 @@ public void test2(){
   * Timed Waiting
   * Terminated
 
+  图解
+
+  ![](https://my-blog-to-use.oss-cn-beijing.aliyuncs.com/19-1-29/Java%20%E7%BA%BF%E7%A8%8B%E7%8A%B6%E6%80%81%E5%8F%98%E8%BF%81.png)
+
 * 可通过对另一线程对象调用`join()`方法，等待该线程执行结束
+
 * 当一个类继承了Thread类，可以通过调用`isInterrupted()`来检测线程是否被中断，其他线程可调用该线程对象的`interrupt()`方法来中断该线程。当一个线程处于等待状态时，若其他线程调用其`interrupt()`方法，会导致该线程捕获到`InterruptedException`，此时该线程应立即结束。可以通过一个`volatile`共享变量来进行线程中断。
 
 
