@@ -14,7 +14,7 @@ spring 的bean的生命周期
 
    注意：若一个bean，实现了BeanPostProcessor接口，并且该bean被纳入spring容器，那么这个bean中的`postProcessBeforeInitialization`和`postProcessAfterInitialization`会对所有bean的创建进行拦截，统一进行前置后置处理
 
-7. `@PostConstruct`
+7. `@PostConstruct`方法
 8. InitializingBean的afterPropertiesSet
 
 9. `<bean>标签中的init-method` 
