@@ -126,3 +126,30 @@ String jsonStr = request.toString();
 //使用ObjectMapper的valueToTree()方法
 ```
 
+
+
+新建一个JsonNode
+
+```java
+ObjectMapper mapper = new ObjectMapper();
+ObjectNode objNode = mapper.createObjectNode();
+objNode.put("name","yogurt");
+objNode.put("age",6);
+
+ArrayNode arrNode = mapper.createArrayNode();
+arrNode.add(1);
+arrNode.add(2);
+arrNode.add(3);
+```
+
+
+
+关于jackson的一个bug
+
+若属性的命名为，第一个字母是小写，紧接着是大写字母
+
+如 `iLoveYou`，在转换成Object时，属性会自动变为`iloveYou`，导致解析失败
+
+至少是2个小写字母开头，然后接大写字母，就不会出现这种问题
+
+或者在属性上加`@JsonPrperty("iLoveYou")`
