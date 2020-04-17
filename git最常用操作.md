@@ -22,6 +22,12 @@ git push -u origin master
 
 
 
+若不行的话， 再尝试将本地仓库和远程仓库做一下关联
+
+```shell
+git branch --set-upstream-to=origin/master
+```
+
 删除远程仓库
 
 ```shell
@@ -36,3 +42,35 @@ git remote remove origin
 git remote show origin
 ```
 
+
+
+
+
+将多个提交记录合并成一个
+
+比如有3个提交记录
+
+commitId  msg
+
+abcd1      "add 1 line"
+
+abcd2      "add 2 line"
+
+abcd3     "add 3 line"
+
+比如要保留adcd1，而把abcd2和abcd3合并成一个commit，可以这样做
+
+```shell
+git rebase -i abcd1
+```
+
+进入vi编辑器
+
+```shell
+pick abcd2
+squash abcd3
+```
+
+保存退出，修改多个commit msg为一个
+
+完毕
