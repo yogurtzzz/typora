@@ -1,3 +1,11 @@
+从远程仓库检出一个新的分支
+
+```shell
+git checkout -b sprint-101 origin/sprint-101
+```
+
+
+
 在远端新建仓库后
 
 在本地进入到工程目录，先将本地目录交由git管理
@@ -27,6 +35,8 @@ git push -u origin master
 ```shell
 git branch --set-upstream-to=origin/master
 ```
+
+若远程仓库已经被删掉了，则原本follow远程仓库的本地仓库则没有了upstream，所以需要删除远程仓库
 
 删除远程仓库
 
