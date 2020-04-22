@@ -36,6 +36,29 @@ volatile能够保证可见性和有序性，但不能保证原子性
      >   关于MESI讲的比较好的一篇文章：
      >
      >   <https://www.cnblogs.com/bjlhx/p/10658938.html>
+     >
+     >   <https://en.wikipedia.org/wiki/MESI_protocol>
+     >
+     >   <https://en.wikipedia.org/wiki/Bus_snooping>
+     >
+     >   MESI之间的状态转换是通过Bus Snooping（总线监听）来实现的
+     >
+     >   Bus Snooping协议分为两种
+     >
+     >   - Write-Invalidate
+     >   - Write-Update
+     >
+     >   而MESI是属于Write-Invalidate的
+     >
+     >   There are two kinds of snooping protocols depending on the way to manage a local copy of a write operation:
+     >
+     >   ### Write-invalidate
+     >
+     >   When a processor writes on a shared cache block, all the shared copies in the other caches are [invalidated](https://en.wikipedia.org/wiki/Cache_invalidation) through bus snooping. This method ensures that only one copy of a datum can be exclusively read and written by a processor. All the other copies in other caches are invalidated. This is the most commonly used snooping protocol. [MSI](https://en.wikipedia.org/wiki/MSI_protocol), [MESI](https://en.wikipedia.org/wiki/MESI_protocol), [MOSI](https://en.wikipedia.org/wiki/MOSI_protocol), [MOESI](https://en.wikipedia.org/wiki/MOESI_protocol), and [MESIF](https://en.wikipedia.org/wiki/MESIF_protocol) protocols belong to this category.
+     >
+     >   ### Write-update
+     >
+     >   When a processor writes on a shared cache block, all the shared copies of the other caches are updated through bus snooping. This method broadcasts a write data to all caches throughout a bus. It incurs larger bus traffic than write-invalidate protocol. That is why this method is uncommon. [Dragon](https://en.wikipedia.org/wiki/Dragon_protocol) and [firefly](https://en.wikipedia.org/wiki/Firefly_(cache_coherence_protocol)) protocols belong to this category.[[3\]](https://en.wikipedia.org/wiki/Bus_snooping#cite_note-3)
 
    - 锁总线
 
