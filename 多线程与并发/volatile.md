@@ -32,6 +32,10 @@ volatile能够保证可见性和有序性，但不能保证原子性
      > - I
      >
      >   I for Invalid. The cache line is invalid or unused.
+     >
+     >   关于MESI讲的比较好的一篇文章：
+     >
+     >   <https://www.cnblogs.com/bjlhx/p/10658938.html>
 
    - 锁总线
 
